@@ -1,30 +1,24 @@
-LIFT VAULT — USERNAME DISPLAY VERSION
+LIFT VAULT — USERNAME DISPLAY FIX
 
-WHAT CHANGED
-- New accounts now choose a username when signing up.
-- Lift Vault displays the username in the top-right instead of the email address.
-- Email + password are still used to sign in.
-- Existing users can click "Change Username" after signing in.
-- Usernames are stored in Supabase Auth user metadata.
-- No new SQL/database changes are required.
+IMPORTANT:
+This package still contains placeholders for:
+  YOUR_SUPABASE_URL
+  YOUR_SUPABASE_PUBLISHABLE_KEY
 
-USERNAME RULES
-- 3 to 20 characters
-- Letters, numbers, and underscores only
-- This version treats usernames as display names; they do not need to be unique.
+Before uploading index.html to GitHub, replace them with the SAME Supabase
+Project URL and Publishable key you already use for Lift Vault / Idea Vault.
 
-UPDATE YOUR LIVE SITE
-Upload/replace:
-- index.html
-- service-worker.js
-- manifest.webmanifest
-- icon-192.png
-- icon-512.png
-- apple-touch-icon.png
-- favicon-32.png
+The previous username-display package could stop all JavaScript before the
+Sign In / Create Account buttons were attached when those placeholders were
+still present. This version no longer fails silently: it shows a clear message.
 
-schema.sql does NOT need to be run again if Lift Vault cloud sync is already working.
+After editing index.html:
+1. Upload/replace index.html and service-worker.js in GitHub.
+2. Wait for GitHub Pages to redeploy.
+3. Refresh the website on computer.
+4. Fully close and reopen the installed phone app.
+5. If the phone still shows the old version, remove the home-screen app and
+   install it again.
 
-After GitHub Pages redeploys, refresh the site.
-If an installed phone app keeps showing the old version, close it completely and reopen it.
-If needed, remove the home-screen app and install it again.
+Sign in still uses EMAIL + PASSWORD.
+Username is the visible display name inside Lift Vault.

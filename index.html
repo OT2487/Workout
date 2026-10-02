@@ -209,9 +209,14 @@ input,select{font-size:16px}
 </main></div>
 
 <script>
-const SUPABASE_URL = "YOUR_SUPABASE_URL";
-const SUPABASE_KEY = "YOUR_SUPABASE_PUBLISHABLE_KEY";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_URL = "https://bddiohdjqybroakanohk.supabase.co";
+const SUPABASE_KEY = "sb_publishable_FuftxSqhv2bCNjxGmL00Sw_PL2N226a";
+const HAS_SUPABASE_CONFIG =
+  !SUPABASE_URL.includes("YOUR_SUPABASE") &&
+  !SUPABASE_KEY.includes("YOUR_SUPABASE");
+const sb = HAS_SUPABASE_CONFIG
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
 
 const DEFAULTS=["Bench Press","Squat","Deadlift","Overhead Press","Incline Dumbbell Press","Barbell Row","Pull Ups"];
 const DEFAULT_TRACKED=["Bench Press","Squat","Deadlift"];
@@ -337,8 +342,9 @@ async function applySession(session){
 }
 
 async function initAuth(){
-  if(SUPABASE_URL.includes("YOUR_SUPABASE") || SUPABASE_KEY.includes("YOUR_SUPABASE")){
-    document.getElementById("authMessage").textContent="Add your Supabase Project URL and Publishable key to index.html first.";
+  if(!sb){
+    document.getElementById("authMessage").textContent =
+      "Lift Vault still needs your Supabase Project URL and Publishable key in index.html.";
     return;
   }
 
@@ -991,9 +997,13 @@ document.getElementById("progressExercise").onchange=drawChart;
 document.getElementById("metric").onchange=drawChart;
 
 document.getElementById("signInBtn").onclick=async()=>{
+  const msg=document.getElementById("authMessage");
+  if(!sb){
+    msg.textContent="Add your Supabase Project URL and Publishable key to index.html first.";
+    return;
+  }
   const email=document.getElementById("authEmail").value.trim();
   const password=document.getElementById("authPassword").value;
-  const msg=document.getElementById("authMessage");
   msg.textContent="Signing in…";
 
   const {error}=await sb.auth.signInWithPassword({email,password});
@@ -1001,11 +1011,14 @@ document.getElementById("signInBtn").onclick=async()=>{
 };
 
 document.getElementById("signUpBtn").onclick=async()=>{
+  const msg=document.getElementById("authMessage");
+  if(!sb){
+    msg.textContent="Add your Supabase Project URL and Publishable key to index.html first.";
+    return;
+  }
   const username=document.getElementById("authUsername").value.trim();
   const email=document.getElementById("authEmail").value.trim();
   const password=document.getElementById("authPassword").value;
-  const msg=document.getElementById("authMessage");
-
   if(!/^[A-Za-z0-9_]{3,20}$/.test(username)){
     msg.textContent="Choose a username 3–20 characters long using letters, numbers, or underscores.";
     return;
