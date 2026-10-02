@@ -99,7 +99,7 @@ input,select{font-size:16px}
 .auth-card h1{margin:0 0 8px;font-size:26px}
 .auth-card p{color:#94a3b8;margin:0 0 18px;line-height:1.45}
 .auth-card .input{width:100%;margin-bottom:10px}
-.auth-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.auth-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 18px}.auth-tab{border:1px solid #334155;background:#0d1520;color:#94a3b8;border-radius:9px;min-height:44px;font-weight:700;cursor:pointer}.auth-tab.active{background:#173866;color:white;border-color:#3b82f6}.auth-main-btn{width:100%;margin-top:4px}
 .auth-message{min-height:22px;color:#94a3b8;font-size:13px;margin-top:12px}
 .sync-status{font-size:12px;color:#94a3b8;margin-left:8px}.username-badge{font-weight:700;color:#e2e8f0}
 #appShell[hidden],#authScreen[hidden]{display:none!important}
@@ -110,14 +110,27 @@ input,select{font-size:16px}
 <div class="auth-screen" id="authScreen">
   <div class="auth-card">
     <h1>🏋️ Lift Vault</h1>
-    <p>Sign in with your Lift Vault account. If you use the same Supabase project as Idea Vault, you can use the same email and password.</p>
-    <input class="input" id="authUsername" type="text" autocomplete="username" maxlength="20" placeholder="Username (used when creating an account)">
-    <input class="input" id="authEmail" type="email" autocomplete="email" placeholder="Email">
-    <input class="input" id="authPassword" type="password" autocomplete="current-password" placeholder="Password">
-    <div class="auth-actions">
-      <button class="btn primary" id="signInBtn">Sign In</button>
-      <button class="btn secondary" id="signUpBtn">Create Account</button>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="showSignInBtn" type="button">Sign In</button>
+      <button class="auth-tab" id="showSignUpBtn" type="button">Create Account</button>
     </div>
+
+    <div id="signInPanel">
+      <p>Sign in with your email and password.</p>
+      <input class="input" id="authEmail" type="email" autocomplete="email" placeholder="Email">
+      <input class="input" id="authPassword" type="password" autocomplete="current-password" placeholder="Password">
+      <button class="btn primary auth-main-btn" id="signInBtn" type="button">Sign In</button>
+    </div>
+
+    <div id="signUpPanel" hidden>
+      <p>Create your account. Your username is what Lift Vault will display after you sign in.</p>
+      <input class="input" id="authUsername" type="text" autocomplete="username" maxlength="20" placeholder="Username">
+      <input class="input" id="signUpEmail" type="email" autocomplete="email" placeholder="Email">
+      <input class="input" id="signUpPassword" type="password" autocomplete="new-password" placeholder="Password">
+      <button class="btn primary auth-main-btn" id="signUpBtn" type="button">Create Account</button>
+    </div>
+
     <div class="auth-message" id="authMessage"></div>
   </div>
 </div>
@@ -337,7 +350,7 @@ async function applySession(session){
     currentUser=null;
     appShell.hidden=true;
     authScreen.hidden=false;
-    document.getElementById("authMessage").textContent="";
+    setAuthMode("signin");
   }
 }
 
@@ -996,6 +1009,18 @@ document.getElementById("addLibrary").onclick=()=>{
 document.getElementById("progressExercise").onchange=drawChart;
 document.getElementById("metric").onchange=drawChart;
 
+function setAuthMode(mode){
+  const signIn=mode==="signin";
+  document.getElementById("signInPanel").hidden=!signIn;
+  document.getElementById("signUpPanel").hidden=signIn;
+  document.getElementById("showSignInBtn").classList.toggle("active",signIn);
+  document.getElementById("showSignUpBtn").classList.toggle("active",!signIn);
+  document.getElementById("authMessage").textContent="";
+}
+
+document.getElementById("showSignInBtn").onclick=()=>setAuthMode("signin");
+document.getElementById("showSignUpBtn").onclick=()=>setAuthMode("signup");
+
 document.getElementById("signInBtn").onclick=async()=>{
   const msg=document.getElementById("authMessage");
   if(!sb){
@@ -1017,8 +1042,8 @@ document.getElementById("signUpBtn").onclick=async()=>{
     return;
   }
   const username=document.getElementById("authUsername").value.trim();
-  const email=document.getElementById("authEmail").value.trim();
-  const password=document.getElementById("authPassword").value;
+  const email=document.getElementById("signUpEmail").value.trim();
+  const password=document.getElementById("signUpPassword").value;
   if(!/^[A-Za-z0-9_]{3,20}$/.test(username)){
     msg.textContent="Choose a username 3–20 characters long using letters, numbers, or underscores.";
     return;
@@ -1046,6 +1071,7 @@ document.getElementById("signUpBtn").onclick=async()=>{
     msg.textContent="";
   }else{
     msg.textContent="Account created. Check your email to confirm it, then sign in.";
+    setTimeout(()=>setAuthMode("signin"),2200);
   }
 };
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "lift-vault-username-fix-v2";
+const CACHE_NAME = "lift-vault-auth-modes-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
