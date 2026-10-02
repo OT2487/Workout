@@ -1,4 +1,4 @@
-const CACHE_NAME = "lift-vault-supabase-v1";
+const CACHE_NAME = "lift-vault-username-v1";
 const APP_SHELL = [
   "./",
   "./index.html",

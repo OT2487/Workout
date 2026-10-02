@@ -101,7 +101,7 @@ input,select{font-size:16px}
 .auth-card .input{width:100%;margin-bottom:10px}
 .auth-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
 .auth-message{min-height:22px;color:#94a3b8;font-size:13px;margin-top:12px}
-.sync-status{font-size:12px;color:#94a3b8;margin-left:8px}
+.sync-status{font-size:12px;color:#94a3b8;margin-left:8px}.username-badge{font-weight:700;color:#e2e8f0}
 #appShell[hidden],#authScreen[hidden]{display:none!important}
 
 </style>
@@ -111,6 +111,7 @@ input,select{font-size:16px}
   <div class="auth-card">
     <h1>🏋️ Lift Vault</h1>
     <p>Sign in with your Lift Vault account. If you use the same Supabase project as Idea Vault, you can use the same email and password.</p>
+    <input class="input" id="authUsername" type="text" autocomplete="username" maxlength="20" placeholder="Username (used when creating an account)">
     <input class="input" id="authEmail" type="email" autocomplete="email" placeholder="Email">
     <input class="input" id="authPassword" type="password" autocomplete="current-password" placeholder="Password">
     <div class="auth-actions">
@@ -137,7 +138,7 @@ input,select{font-size:16px}
 <main class="main">
  <div class="top">
    <div class="row"><button class="hamb" id="hamb">☰</button><h1>Lift Vault</h1><span class="sync-status" id="syncStatus"></span></div>
-   <div class="row user"><span id="signedInEmail"></span><button class="btn secondary" id="signOutBtn">Sign Out</button></div>
+   <div class="row user"><span id="signedInUsername" class="username-badge"></span><button class="btn secondary" id="changeUsernameBtn">Change Username</button><button class="btn secondary" id="signOutBtn">Sign Out</button></div>
   </div>
 
  <section class="page active" id="dashboard">
@@ -208,8 +209,8 @@ input,select{font-size:16px}
 </main></div>
 
 <script>
-const SUPABASE_URL = "https://bddiohdjqybroakanohk.supabase.co";
-const SUPABASE_KEY = "sb_publishable_FuftxSqhv2bCNjxGmL00Sw_PL2N226a";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_KEY = "YOUR_SUPABASE_PUBLISHABLE_KEY";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const DEFAULTS=["Bench Press","Squat","Deadlift","Overhead Press","Incline Dumbbell Press","Barbell Row","Pull Ups"];
@@ -323,7 +324,9 @@ async function applySession(session){
     currentUser=session.user;
     authScreen.hidden=true;
     appShell.hidden=false;
-    document.getElementById("signedInEmail").textContent=currentUser.email||"";
+    const displayName=(currentUser.user_metadata?.username||"").trim() ||
+      ((currentUser.email||"").split("@")[0] || "User");
+    document.getElementById("signedInUsername").textContent=displayName;
     await loadCloudState();
   }else{
     currentUser=null;
@@ -998,9 +1001,15 @@ document.getElementById("signInBtn").onclick=async()=>{
 };
 
 document.getElementById("signUpBtn").onclick=async()=>{
+  const username=document.getElementById("authUsername").value.trim();
   const email=document.getElementById("authEmail").value.trim();
   const password=document.getElementById("authPassword").value;
   const msg=document.getElementById("authMessage");
+
+  if(!/^[A-Za-z0-9_]{3,20}$/.test(username)){
+    msg.textContent="Choose a username 3–20 characters long using letters, numbers, or underscores.";
+    return;
+  }
 
   if(!email || password.length<6){
     msg.textContent="Enter your email and a password with at least 6 characters.";
@@ -1012,7 +1021,10 @@ document.getElementById("signUpBtn").onclick=async()=>{
   const {data,error}=await sb.auth.signUp({
     email,
     password,
-    options:{emailRedirectTo:redirectTo}
+    options:{
+      emailRedirectTo:redirectTo,
+      data:{username}
+    }
   });
 
   if(error){
@@ -1022,6 +1034,34 @@ document.getElementById("signUpBtn").onclick=async()=>{
   }else{
     msg.textContent="Account created. Check your email to confirm it, then sign in.";
   }
+};
+
+document.getElementById("changeUsernameBtn").onclick=async()=>{
+  if(!currentUser) return;
+
+  const current=(currentUser.user_metadata?.username||"").trim();
+  const next=prompt("Enter a new username:",current);
+
+  if(next===null) return;
+
+  const username=next.trim();
+  if(!/^[A-Za-z0-9_]{3,20}$/.test(username)){
+    alert("Username must be 3–20 characters and use only letters, numbers, or underscores.");
+    return;
+  }
+
+  const {data,error}=await sb.auth.updateUser({
+    data:{username}
+  });
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  currentUser=data.user;
+  document.getElementById("signedInUsername").textContent=username;
+  alert("Username updated.");
 };
 
 document.getElementById("signOutBtn").onclick=async()=>{
