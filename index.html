@@ -15,6 +15,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--bg:#090d12;--side:#0d131c;--panel:#111925;--panel2:#151f2d;--border:#263449;--text:#f4f7fb;--muted:#94a3b8;--blue:#3b82f6;--green:#22c55e;--red:#f43f5e;--gold:#fbbf24}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Arial,sans-serif}
@@ -79,10 +80,48 @@ input,select{font-size:16px}
   .card{border-radius:14px}
 }
 
+
+.auth-screen{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:22px;
+  background:#090d12;
+}
+.auth-card{
+  width:min(440px,100%);
+  background:linear-gradient(145deg,#111925,#0e1621);
+  border:1px solid #263449;
+  border-radius:16px;
+  padding:24px;
+}
+.auth-card h1{margin:0 0 8px;font-size:26px}
+.auth-card p{color:#94a3b8;margin:0 0 18px;line-height:1.45}
+.auth-card .input{width:100%;margin-bottom:10px}
+.auth-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.auth-message{min-height:22px;color:#94a3b8;font-size:13px;margin-top:12px}
+.sync-status{font-size:12px;color:#94a3b8;margin-left:8px}
+#appShell[hidden],#authScreen[hidden]{display:none!important}
+
 </style>
 </head>
 <body>
-<div class="app">
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <h1>🏋️ Lift Vault</h1>
+    <p>Sign in with your Lift Vault account. If you use the same Supabase project as Idea Vault, you can use the same email and password.</p>
+    <input class="input" id="authEmail" type="email" autocomplete="email" placeholder="Email">
+    <input class="input" id="authPassword" type="password" autocomplete="current-password" placeholder="Password">
+    <div class="auth-actions">
+      <button class="btn primary" id="signInBtn">Sign In</button>
+      <button class="btn secondary" id="signUpBtn">Create Account</button>
+    </div>
+    <div class="auth-message" id="authMessage"></div>
+  </div>
+</div>
+
+<div class="app" id="appShell" hidden>
 <aside class="sidebar" id="sidebar">
  <div class="brand">🏋️ Lift Vault</div>
  <nav class="nav">
@@ -96,7 +135,10 @@ input,select{font-size:16px}
  </nav>
 </aside>
 <main class="main">
- <div class="top"><div class="row"><button class="hamb" id="hamb">☰</button><h1>Lift Vault</h1></div><div class="user">Training Dashboard</div></div>
+ <div class="top">
+   <div class="row"><button class="hamb" id="hamb">☰</button><h1>Lift Vault</h1><span class="sync-status" id="syncStatus"></span></div>
+   <div class="row user"><span id="signedInEmail"></span><button class="btn secondary" id="signOutBtn">Sign Out</button></div>
+  </div>
 
  <section class="page active" id="dashboard">
   <div class="card">
@@ -166,21 +208,144 @@ input,select{font-size:16px}
 </main></div>
 
 <script>
-const DEFAULTS=["Bench Press","Squat","Deadlift","Overhead Press","Incline Dumbbell Press","Barbell Row","Pull Ups"];
+const SUPABASE_URL = "https://bddiohdjqybroakanohk.supabase.co/rest/v1/";
+const SUPABASE_KEY = "sb_publishable_FuftxSqhv2bCNjxGmL00Sw_PL2N226a";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let exercises=JSON.parse(localStorage.getItem("lv_exercises")||"null")||DEFAULTS;
-let workouts=JSON.parse(localStorage.getItem("lv_workouts")||"[]");
-let tracked=JSON.parse(localStorage.getItem("lv_tracked")||"null")||["Bench Press","Squat","Deadlift"];
-let templates=JSON.parse(localStorage.getItem("lv_templates")||"[]");
+const DEFAULTS=["Bench Press","Squat","Deadlift","Overhead Press","Incline Dumbbell Press","Barbell Row","Pull Ups"];
+const DEFAULT_TRACKED=["Bench Press","Squat","Deadlift"];
+
+let exercises=DEFAULTS.slice();
+let workouts=[];
+let tracked=DEFAULT_TRACKED.slice();
+let templates=[];
 let editingWorkoutId=null;
 let chart=null;
+let currentUser=null;
+let cloudSaveTimer=null;
+let cloudSaveInFlight=Promise.resolve();
 
-const save=()=>{
+function loadLocalCache(){
+  exercises=JSON.parse(localStorage.getItem("lv_exercises")||"null")||DEFAULTS.slice();
+  workouts=JSON.parse(localStorage.getItem("lv_workouts")||"[]");
+  tracked=JSON.parse(localStorage.getItem("lv_tracked")||"null")||DEFAULT_TRACKED.slice();
+  templates=JSON.parse(localStorage.getItem("lv_templates")||"[]");
+}
+
+function writeLocalCache(){
   localStorage.setItem("lv_exercises",JSON.stringify(exercises));
   localStorage.setItem("lv_workouts",JSON.stringify(workouts));
   localStorage.setItem("lv_tracked",JSON.stringify(tracked));
   localStorage.setItem("lv_templates",JSON.stringify(templates));
+}
+
+function setSyncStatus(text){
+  const el=document.getElementById("syncStatus");
+  if(el) el.textContent=text||"";
+}
+
+function queueCloudSave(){
+  if(!currentUser) return;
+  clearTimeout(cloudSaveTimer);
+  setSyncStatus("Saving…");
+  cloudSaveTimer=setTimeout(()=>{
+    const payload={
+      user_id:currentUser.id,
+      exercises:JSON.parse(JSON.stringify(exercises)),
+      workouts:JSON.parse(JSON.stringify(workouts)),
+      tracked:JSON.parse(JSON.stringify(tracked)),
+      templates:JSON.parse(JSON.stringify(templates)),
+      updated_at:new Date().toISOString()
+    };
+
+    cloudSaveInFlight=cloudSaveInFlight.then(async()=>{
+      const {error}=await sb.from("lift_vault_state").upsert(payload,{onConflict:"user_id"});
+      if(error){
+        console.error(error);
+        setSyncStatus("Sync error");
+      }else{
+        setSyncStatus("Saved");
+        setTimeout(()=>{ if(document.getElementById("syncStatus")?.textContent==="Saved") setSyncStatus(""); },1400);
+      }
+    });
+  },250);
+}
+
+const save=()=>{
+  writeLocalCache();
+  queueCloudSave();
 };
+
+async function loadCloudState(){
+  if(!currentUser) return;
+
+  setSyncStatus("Syncing…");
+  const {data,error}=await sb
+    .from("lift_vault_state")
+    .select("exercises,workouts,tracked,templates")
+    .eq("user_id",currentUser.id)
+    .maybeSingle();
+
+  if(error){
+    console.error(error);
+    setSyncStatus("Sync error");
+    return;
+  }
+
+  if(data){
+    exercises=Array.isArray(data.exercises)?data.exercises:DEFAULTS.slice();
+    workouts=Array.isArray(data.workouts)?data.workouts:[];
+    tracked=Array.isArray(data.tracked)&&data.tracked.length?data.tracked:DEFAULT_TRACKED.slice();
+    templates=Array.isArray(data.templates)?data.templates:[];
+    writeLocalCache();
+  }else{
+    // First cloud login: migrate any existing Lift Vault data from this browser.
+    loadLocalCache();
+    await sb.from("lift_vault_state").upsert({
+      user_id:currentUser.id,
+      exercises,
+      workouts,
+      tracked,
+      templates,
+      updated_at:new Date().toISOString()
+    },{onConflict:"user_id"});
+  }
+
+  setSyncStatus("");
+  renderAll();
+}
+
+async function applySession(session){
+  const authScreen=document.getElementById("authScreen");
+  const appShell=document.getElementById("appShell");
+
+  if(session?.user){
+    currentUser=session.user;
+    authScreen.hidden=true;
+    appShell.hidden=false;
+    document.getElementById("signedInEmail").textContent=currentUser.email||"";
+    await loadCloudState();
+  }else{
+    currentUser=null;
+    appShell.hidden=true;
+    authScreen.hidden=false;
+    document.getElementById("authMessage").textContent="";
+  }
+}
+
+async function initAuth(){
+  if(SUPABASE_URL.includes("YOUR_SUPABASE") || SUPABASE_KEY.includes("YOUR_SUPABASE")){
+    document.getElementById("authMessage").textContent="Add your Supabase Project URL and Publishable key to index.html first.";
+    return;
+  }
+
+  const {data:{session}}=await sb.auth.getSession();
+  await applySession(session);
+
+  sb.auth.onAuthStateChange((_event,session)=>{
+    setTimeout(()=>applySession(session),0);
+  });
+}
 
 const today=()=>new Date().toISOString().slice(0,10);
 
@@ -822,7 +987,48 @@ document.getElementById("addLibrary").onclick=()=>{
 document.getElementById("progressExercise").onchange=drawChart;
 document.getElementById("metric").onchange=drawChart;
 
-renderAll();
+document.getElementById("signInBtn").onclick=async()=>{
+  const email=document.getElementById("authEmail").value.trim();
+  const password=document.getElementById("authPassword").value;
+  const msg=document.getElementById("authMessage");
+  msg.textContent="Signing in…";
+
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  msg.textContent=error?error.message:"";
+};
+
+document.getElementById("signUpBtn").onclick=async()=>{
+  const email=document.getElementById("authEmail").value.trim();
+  const password=document.getElementById("authPassword").value;
+  const msg=document.getElementById("authMessage");
+
+  if(!email || password.length<6){
+    msg.textContent="Enter your email and a password with at least 6 characters.";
+    return;
+  }
+
+  msg.textContent="Creating account…";
+  const redirectTo=window.location.origin+window.location.pathname;
+  const {data,error}=await sb.auth.signUp({
+    email,
+    password,
+    options:{emailRedirectTo:redirectTo}
+  });
+
+  if(error){
+    msg.textContent=error.message;
+  }else if(data.session){
+    msg.textContent="";
+  }else{
+    msg.textContent="Account created. Check your email to confirm it, then sign in.";
+  }
+};
+
+document.getElementById("signOutBtn").onclick=async()=>{
+  await sb.auth.signOut();
+};
+
+initAuth();
 </script>
 
 <script>
